@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package raftRpcProctoc; //所在的命名空间
+
+option cc_generic_services = true;  //开启stub服务
+
+//日志实体
+message LogEntry{ //日志有很多， 可以看成一个连续的数组，数组中的一个称为entry
+    bytes Command = 1;
+    int32 LogTerm = 2;
+    int32 LogIndex= 3;
+}
+
+//AppendEntriesArgs 由Leader 复制 Log的条目，也可以看作是心跳连接，注释中的rf为leader节点
+message AppendEntriesArgs
+{
+    int32 Term = 1; //任期
+    int32 LeaderId =2; 
+    int32 PrevLogIndex=3; //在正在备份的日志记录之前的日志记录的 index 值
+    int32 PrevLogTerm =4; //在正在备份的日志记录之前的日志记录的 Term ID
+    repeated LogEntry Entries = 5;  //正在备份的日志记录
+    int32 LeaderCommit = 6;         // Leader已经提交的最后一条日志记录的index值
+}
+
+//AppendEntriesReply 论文中没有提及返回要设置哪些状态
+message AppendEntriesReply
+{
+    int32 Term = 1;             //接收方的当前 Term ID
+    bool Success = 2;           //当 Follower 能够在自己的日志中找到 index 值和 Term ID 与 
+                                //prevLogIndex 和 prevLogTerm 相同的记录时为 true
+
+    int32 UpdateNextIndex = 3;  //表示 Leader 需要将下一个要发送的日志条目的索引更新为多少。
+                                //当 Success 参数为 false 时，让节点返回给leader应该更新的状态UpdateNextIndex 
+                                //一般更新为节点当前有的最后一个日志号的后面一个
+                                
+    int32 AppState =4;          //可选参数，用于表示回复节点的应用程序状态
+}
+
+message RequestVoteArgs 
+{
+    int32 Term =1;        // Candidate的Term id
+    int32 CandidateId =2; // Candidate 的id
+    int32 LastLogIndex =3;// Candidate所持有的最后一条日志记录的index
+    int32 LastLogTerm  =4;// Candidate所持有的最后一条日志记录的Term ID 
+}
+
+
+//RequestVoteReply
+//example RequestVote RPC reply structure.
+//field names must start with capital letters!
+
+message RequestVoteReply
+{
+    int32 Term =1;
+    bool VoteGranted =2; //是否同意投票给Candidate ，如果该参数为true ，则表示节点同意投票给Candidate
+    int32 VoteState =3;  // 可选参数 
+}
+
+message InstallSnapshotRequest 
+{
+    int32 LeaderId  = 1;
+    int32 Term      = 2;
+    int32 LastSnapShotIncludeIndex=3;
+    int32 LastSnapShotIncludeTerm =4;
+    bytes Data                    =5; //快照信息
+}
+
+
+// InstallSnapshotResponse 只用返回Term，因为对于快照只要Term是符合的就是无条件接受的
+message InstallSnapshotResponse  {
+	int32 Term  = 1;
+}
+
+//只有raft节点之间才会涉及rpc通信
+service raftRpc
+{
+    rpc AppendEntries(AppendEntriesArgs) returns(AppendEntriesReply);
+    rpc InstallSnapshot(InstallSnapshotRequest) returns(InstallSnapshotResponse);
+    rpc RequestVote (RequestVoteArgs) returns(RequestVoteReply);
+}
+
